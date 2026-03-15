@@ -66,7 +66,6 @@ void Grbl::setup() {
     this->recv_buf_.reserve(128);
 
     this->server_ = AsyncServer(this->port_);
-    this->server_.begin();
     this->server_.onClient(
         [this](void* h, AsyncClient* tcp_client) {
             if (tcp_client == nullptr) return;
@@ -89,7 +88,13 @@ void Grbl::setup() {
         this);
 
     this->send_reset();
-    this->send_command("S0\nM5\n");  // Ensure spindle/laser mode is off
+    this->send_command("S0\nM5\n");  // Ensure spindle/laser is off
+    this->send_command("$$");  // Request GRBL settings update on startup
+
+    // We wait a bit more before starting the server to give GRBL time to reset and be ready to accept commands
+    this->set_timeout(500, [this]() {
+        this->server_.begin();
+    });
 }
 
 void Grbl::loop() {
@@ -118,7 +123,19 @@ void Grbl::serial_read_() {
             ESP_LOGE(TAG, "Error reading from UART");
             return;
         }
-        // TODO Parse lines to get useful information about the state of the machine and report it via sensors
+
+        // Parse lines to get useful information about the state of the machine and report it via sensors
+        for (size_t i = 0, ls = 0; i <= len; i++) {
+            if (i == len || buf[i] == '\n') {
+                this->line_buffer_.append(reinterpret_cast<const char*>(buf + ls), i - ls);
+                if (buf[i] == '\n') {
+                    this->parse_grbl_response_(this->line_buffer_);
+                    this->line_buffer_.clear();
+                }
+                ls = i + 1;
+            }
+        }
+
         if (this->client_connected()) {
             this->client_->tcp_client->write(reinterpret_cast<const char*>(buf), len);
         }
@@ -136,12 +153,33 @@ void Grbl::serial_write_() {
 void Grbl::dump_config() {
     ESP_LOGCONFIG(TAG, "GRBL:");
     ESP_LOGCONFIG(TAG, "  TCP Port: %u", this->port_);
+    ESP_LOGCONFIG(TAG, "  Commands when client connected: %s", YESNO(this->allow_commands_when_connected_));
+    ESP_LOGCONFIG(TAG, "  GRBL Settings:");
+    for (auto setting : this->grbl_settings_) {
+        ESP_LOGCONFIG(TAG, "    $%d=%g", setting.first, setting.second);
+    }
 }
 
 void Grbl::on_shutdown() {
     if (this->client_ && this->client_->tcp_client) {
         ESP_LOGD(TAG, "Shutting down GRBL, closing client connection");
         this->client_->tcp_client->close(true);
+    }
+}
+
+void Grbl::parse_grbl_response_(const std::string& line) {
+    // Expected format: $<number>=<int_or_float> (e.g. $32=0, $110=500.0)
+    int setting_id = 0;
+    float setting_value = 0.0f;
+    int consumed = 0;
+
+    if (sscanf(line.c_str(), "$%d=%f%n", &setting_id, &setting_value, &consumed) == 2 &&
+        consumed == static_cast<int>(line.size()) - 1) {
+        this->grbl_settings_[setting_id] = setting_value;
+        ESP_LOGV(TAG, "Parsed GRBL setting: $%d=%f", setting_id, setting_value);
+        for (auto* listener : this->listeners_) {
+            listener->update(setting_id, setting_value);
+        }
     }
 }
 

@@ -18,7 +18,9 @@
 
 #pragma once
 
+#include <map>
 #include <memory>
+#include <optional>
 
 #include "esphome/components/binary_sensor/binary_sensor.h"
 #include "esphome/components/uart/uart.h"
@@ -39,7 +41,7 @@ class Grbl : public uart::UARTDevice, public Component {
     void dump_config() override;
     void on_shutdown() override;
 
-    float get_setup_priority() const override { return esphome::setup_priority::AFTER_WIFI; }
+    float get_setup_priority() const override { return esphome::setup_priority::LATE; }
 
     void set_port(uint16_t port) { this->port_ = port; }
     void set_allow_commands_when_connected(bool allow) { this->allow_commands_when_connected_ = allow; }
@@ -55,6 +57,29 @@ class Grbl : public uart::UARTDevice, public Component {
     void send_reset();
     void release_state();
     void set_home(bool xy = true, bool z = true);
+
+    template <typename T> std::optional<T> get_grbl_setting(int setting_number) {
+        auto it = this->grbl_settings_.find(setting_number);
+        if (it != this->grbl_settings_.end())
+            return static_cast<T>(it->second);
+        else
+            return std::nullopt;
+    }
+    template <typename T> void set_grbl_setting(int setting_number, T value) {
+        char buf[32];
+        snprintf(buf, sizeof(buf), "$%d=%d\n$$", setting_number, value);
+        this->send_command(buf);
+    }
+
+    class Listener {
+      public:
+        virtual void update(int setting, float value) = 0;
+        virtual ~Listener() = default;
+    };
+
+    void register_listener(Listener* listener) {
+        this->listeners_.push_back(listener);
+    }
 
   protected:
     AsyncServer server_{0};
@@ -82,12 +107,30 @@ class Grbl : public uart::UARTDevice, public Component {
 
     bool allow_commands_when_connected_;
 
+    std::string line_buffer_{};
+    std::map<int, float> grbl_settings_{};
+    std::vector<Listener*> listeners_{};
+
     void cleanup_();
 
     void serial_read_();
     void serial_write_();
     void update_connection_sensor_();
+
+    void parse_grbl_response_(const std::string& line);
 };
+
+template <> inline void Grbl::set_grbl_setting<float>(int setting_number, float value) {
+    char buf[32];
+    snprintf(buf, sizeof(buf), "$%d=%.3f\n$$", setting_number, value);
+    this->send_command(buf);
+}
+
+template <> inline void Grbl::set_grbl_setting<bool>(int setting_number, bool value) {
+    char buf[32];
+    snprintf(buf, sizeof(buf), "$%d=%d\n", setting_number, static_cast<int>(value));
+    this->send_command(buf);
+}
 
 }}  // namespace esphome::grbl
 

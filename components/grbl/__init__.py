@@ -33,6 +33,19 @@ def to_code(config):
 
     yield uart.register_uart_device(var, config)
 
+## Tools
+
+def grbl_param(value):
+    if isinstance(value, int):
+        return value
+
+    if isinstance(value, str) and value.startswith("$"):
+        try:
+            return int(value[1:])
+        except ValueError:
+            pass
+
+    raise cv.Invalid("GRBL parameter must be an integer or '$<number>'")
 
 ## Actions
 
