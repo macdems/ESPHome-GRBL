@@ -89,12 +89,10 @@ void Grbl::setup() {
 
     this->send_reset();
     this->send_command("S0\nM5\n");  // Ensure spindle/laser is off
-    this->send_command("$$");  // Request GRBL settings update on startup
+    this->send_command("$$");        // Request GRBL settings update on startup
 
     // We wait a bit more before starting the server to give GRBL time to reset and be ready to accept commands
-    this->set_timeout(500, [this]() {
-        this->server_.begin();
-    });
+    this->set_timeout(500, [this]() { this->server_.begin(); });
 }
 
 void Grbl::loop() {
@@ -241,7 +239,20 @@ void Grbl::set_home(bool xy, bool z) {
     std::string cmd = "G92";
     if (xy) cmd += " X0 Y0";
     if (z) cmd += " Z0";
-    this->send_command(cmd.c_str());
+    this->send_command(cmd);
+}
+
+void Grbl::probe_z(float distance, float seek_rate, float feed_rate, float offset, float retract) {
+    char cmd[256];
+    snprintf(cmd, sizeof(cmd),
+             "G21 G91\n"
+             "G38.2 Z-%.3f F%.1f\n"
+             "G0 Z1\n"
+             "G38.2 Z-2 F%.3f\n"
+             "G92 Z%.3f\n"
+             "G91 G0 Z%.3f",
+             distance, seek_rate, feed_rate, offset, retract);
+    send_command(cmd);
 }
 
 }}  // namespace esphome::grbl

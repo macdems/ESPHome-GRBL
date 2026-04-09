@@ -129,7 +129,7 @@ async def grbl_jog_to_code(config, action_id, template_arg, args):
     return var
 
 
-# grbl.set_home
+# grbl.set_home action
 
 GrblSetHomeAction = ns.class_("GrblSetHomeAction", automation.Action, cg.Parented.template(Grbl))
 
@@ -148,4 +148,33 @@ async def grbl_set_home_to_code(config, action_id, template_arg, args):
     cg.add(var.set_xy(xy))
     z = config[CONF_Z]
     cg.add(var.set_z(z))
+    return var
+
+# grbl.probe_z action
+
+GrblProbeZAction = ns.class_("GrblProbeZAction", automation.Action, cg.Parented.template(Grbl))
+
+GRBL_PROBE_Z_SCHEMA = cv.Schema({
+    cv.GenerateID(CONF_GRBL_ID): cv.use_id(Grbl),
+    cv.Optional(CONF_DISTANCE, default=30.0): cv.templatable(cv.float_),
+    cv.Optional(CONF_SEEK_RATE, default=100.0): cv.templatable(cv.float_),
+    cv.Optional(CONF_FEED_RATE, default=10.0): cv.templatable(cv.float_),
+    cv.Optional(CONF_OFFSET, default=0.0): cv.templatable(cv.float_),
+    cv.Optional(CONF_RETRACT, default=5.0): cv.templatable(cv.float_),
+})
+
+@automation.register_action("grbl.probe_z", GrblProbeZAction, GRBL_PROBE_Z_SCHEMA, synchronous=True)
+async def grbl_probe_z_to_code(config, action_id, template_arg, args):
+    var = cg.new_Pvariable(action_id, template_arg)
+    await cg.register_parented(var, config[CONF_GRBL_ID])
+    distance = await cg.templatable(config[CONF_DISTANCE], args, cg.float_)
+    cg.add(var.set_distance(distance))
+    seek_rate = await cg.templatable(config[CONF_SEEK_RATE], args, cg.float_)
+    cg.add(var.set_seek_rate(seek_rate))
+    feed_rate = await cg.templatable(config[CONF_FEED_RATE], args, cg.float_)
+    cg.add(var.set_feed_rate(feed_rate))
+    offset = await cg.templatable(config[CONF_OFFSET], args, cg.float_)
+    cg.add(var.set_offset(offset))
+    retract = await cg.templatable(config[CONF_RETRACT], args, cg.float_)
+    cg.add(var.set_retract(retract))
     return var

@@ -76,6 +76,24 @@ template <typename... Ts> class GrblSetHomeAction : public Action<Ts...>, public
     }
 };
 
+template <typename... Ts> class GrblProbeZAction : public Action<Ts...>, public Parented<Grbl> {
+  public:
+    TEMPLATABLE_VALUE(float, distance)
+    TEMPLATABLE_VALUE(float, seek_rate)
+    TEMPLATABLE_VALUE(float, feed_rate)
+    TEMPLATABLE_VALUE(float, offset)
+    TEMPLATABLE_VALUE(float, retract)
+
+    void play(Ts... x) override {
+        float distance = this->distance_.value_or(x..., 30.);
+        float seek_rate = this->seek_rate_.value_or(x..., 100.);
+        float feed_rate = this->feed_rate_.value_or(x..., 10.);
+        float offset = this->offset_.value_or(x..., 0.);
+        float retract = this->retract_.value_or(x..., 5.);
+        this->parent_->probe_z(distance, seek_rate, feed_rate, offset, retract);
+    }
+};
+
 }}  // namespace esphome::grbl
 
 

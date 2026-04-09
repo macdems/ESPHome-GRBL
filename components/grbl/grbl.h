@@ -57,6 +57,7 @@ class Grbl : public uart::UARTDevice, public Component {
     void send_reset();
     void release_state();
     void set_home(bool xy = true, bool z = true);
+    void probe_z(float distance = 30.0, float seek_rate = 100.0, float feed_rate = 10.0, float offset = 0.0, float retract = 5.0);
 
     template <typename T> std::optional<T> get_grbl_setting(int setting_number) {
         auto it = this->grbl_settings_.find(setting_number);
