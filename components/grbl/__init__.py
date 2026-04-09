@@ -33,7 +33,9 @@ def to_code(config):
 
     yield uart.register_uart_device(var, config)
 
+
 ## Tools
+
 
 def grbl_param(value):
     if isinstance(value, int):
@@ -46,6 +48,7 @@ def grbl_param(value):
             pass
 
     raise cv.Invalid("GRBL parameter must be an integer or '$<number>'")
+
 
 ## Actions
 
@@ -61,11 +64,7 @@ def register_grbl_simple_action(action_name, class_name):
         cg.Parented.template(Grbl),
     )
 
-    @automation.register_action(
-        action_name,
-        cls,
-        GRBL_SIMPLE_ACTION_SCHEMA,
-    )
+    @automation.register_action(action_name, cls, GRBL_SIMPLE_ACTION_SCHEMA, synchronous=True)
     async def action_to_code(config, action_id, template_arg, args):
         var = cg.new_Pvariable(action_id, template_arg)
         await cg.register_parented(var, config[CONF_GRBL_ID])
@@ -93,7 +92,7 @@ GRBL_SEND_COMMAND_SCHEMA = cv.maybe_simple_value(
 )
 
 
-@automation.register_action(ACTION_SEND_COMMAND, GrblSendCommandAction, GRBL_SEND_COMMAND_SCHEMA)
+@automation.register_action(ACTION_SEND_COMMAND, GrblSendCommandAction, GRBL_SEND_COMMAND_SCHEMA, synchronous=True)
 async def grbl_send_command_to_code(config, action_id, template_arg, args):
     var = cg.new_Pvariable(action_id, template_arg)
     await cg.register_parented(var, config[CONF_GRBL_ID])
@@ -115,7 +114,7 @@ GRBL_JOG_SCHEMA = cv.Schema({
 })
 
 
-@automation.register_action(ACTION_JOG, GrblJogAction, GRBL_JOG_SCHEMA)
+@automation.register_action(ACTION_JOG, GrblJogAction, GRBL_JOG_SCHEMA, synchronous=True)
 async def grbl_jog_to_code(config, action_id, template_arg, args):
     var = cg.new_Pvariable(action_id, template_arg)
     await cg.register_parented(var, config[CONF_GRBL_ID])
@@ -141,7 +140,7 @@ GRBL_SET_HOME_SCHEMA = cv.Schema({
 })
 
 
-@automation.register_action(ACTION_SET_HOME, GrblSetHomeAction, GRBL_SET_HOME_SCHEMA)
+@automation.register_action(ACTION_SET_HOME, GrblSetHomeAction, GRBL_SET_HOME_SCHEMA, synchronous=True)
 async def grbl_set_home_to_code(config, action_id, template_arg, args):
     var = cg.new_Pvariable(action_id, template_arg)
     await cg.register_parented(var, config[CONF_GRBL_ID])

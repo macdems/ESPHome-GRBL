@@ -184,7 +184,7 @@ void Grbl::parse_grbl_response_(const std::string& line) {
 }
 
 void Grbl::send_command(const std::string& command) {
-    if (this->client_connected() && this->allow_commands_when_connected_) {
+    if (this->client_connected() && !this->allow_commands_when_connected_) {
         ESP_LOGW(TAG, "Not sending command '%s' because a client is connected", command.c_str());
         return;
     }

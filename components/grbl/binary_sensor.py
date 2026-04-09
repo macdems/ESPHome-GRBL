@@ -31,9 +31,9 @@ async def to_code(config):
     param = config[CONF_ENTITY_PARAM]
 
     if param == CONF_CLIENT_CONNECTED:
-        var = await binary_sensor.new_binary_sensor(config)
         if not CONF_DEVICE_CLASS in config:
-            cg.add(var.set_device_class(DEVICE_CLASS_CONNECTIVITY))
+            config[CONF_DEVICE_CLASS] = DEVICE_CLASS_CONNECTIVITY
+        var = await binary_sensor.new_binary_sensor(config)
         cg.add(parent.register_connection_sensor(var))
 
     else:

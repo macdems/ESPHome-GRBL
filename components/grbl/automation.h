@@ -39,7 +39,7 @@ template <typename... Ts> class GrblSendCommandAction : public Action<Ts...>, pu
   public:
     TEMPLATABLE_VALUE(std::string, command)
 
-    void play(Ts... x) override {
+    void play(const Ts&... x) override {
         auto cmd = this->command_.value(x...);
         this->parent_->send_command(cmd);
     }
