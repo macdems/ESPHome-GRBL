@@ -35,6 +35,11 @@ template <typename... Ts> class GrblReleaseStateAction : public Action<Ts...>, p
     void play(Ts... x) override { this->parent_->release_state(); }
 };
 
+template <typename... Ts> class GrblRunHomingCycleAction : public Action<Ts...>, public Parented<Grbl> {
+  public:
+    void play(Ts... x) override { this->parent_->run_homing_cycle(); }
+};
+
 template <typename... Ts> class GrblSendCommandAction : public Action<Ts...>, public Parented<Grbl> {
   public:
     TEMPLATABLE_VALUE(std::string, command)

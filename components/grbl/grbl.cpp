@@ -242,6 +242,10 @@ void Grbl::set_home(bool xy, bool z) {
     this->send_command(cmd);
 }
 
+void Grbl::run_homing_cycle() {
+    this->send_command("$H\n");  // GRBL command to run homing cycle
+}
+
 void Grbl::probe_z(float distance, float seek_rate, float feed_rate, float offset, float retract) {
     char cmd[256];
     snprintf(cmd, sizeof(cmd),

@@ -73,11 +73,12 @@ def register_grbl_simple_action(action_name, class_name):
     return cls
 
 
-# grbl.cancel_jog, grbl.reset and grbl.release_state actions
+# grbl.cancel_jog, grbl.reset, grbl.release_state, and grbl.run_homing_cycle actions
 
 GrblCancelJogAction = register_grbl_simple_action(ACTION_CANCEL_JOG, "GrblCancelJogAction")
 GrblSendResetAction = register_grbl_simple_action(ACTION_RESET, "GrblSendResetAction")
 GrblReleaseStateAction = register_grbl_simple_action(ACTION_RELEASE_STATE, "GrblReleaseStateAction")
+GrblRunHomingCycleAction = register_grbl_simple_action(ACTION_RUN_HOMING_CYCLE, "GrblRunHomingCycleAction")
 
 # grbl.send_command action
 
