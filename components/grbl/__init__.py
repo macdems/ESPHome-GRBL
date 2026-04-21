@@ -136,8 +136,8 @@ GrblSetHomeAction = ns.class_("GrblSetHomeAction", automation.Action, cg.Parente
 
 GRBL_SET_HOME_SCHEMA = cv.Schema({
     cv.GenerateID(CONF_GRBL_ID): cv.use_id(Grbl),
-    cv.Optional(CONF_XY, default=True): cv.boolean,
-    cv.Optional(CONF_Z, default=True): cv.boolean,
+    cv.Optional(CONF_XY, default=True): cv.templatable(cv.boolean),
+    cv.Optional(CONF_Z, default=True): cv.templatable(cv.boolean),
 })
 
 
@@ -145,9 +145,9 @@ GRBL_SET_HOME_SCHEMA = cv.Schema({
 async def grbl_set_home_to_code(config, action_id, template_arg, args):
     var = cg.new_Pvariable(action_id, template_arg)
     await cg.register_parented(var, config[CONF_GRBL_ID])
-    xy = config[CONF_XY]
+    xy = await cg.templatable(config[CONF_XY], args, cg.bool_)
     cg.add(var.set_xy(xy))
-    z = config[CONF_Z]
+    z = await cg.templatable(config[CONF_Z], args, cg.bool_)
     cg.add(var.set_z(z))
     return var
 

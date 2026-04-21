@@ -71,12 +71,12 @@ template <typename... Ts> class GrblJogAction : public Action<Ts...>, public Par
 
 template <typename... Ts> class GrblSetHomeAction : public Action<Ts...>, public Parented<Grbl> {
   public:
-    TEMPLATABLE_VALUE(float, xy)
-    TEMPLATABLE_VALUE(float, z)
+    TEMPLATABLE_VALUE(bool, xy)
+    TEMPLATABLE_VALUE(bool, z)
 
     void play(Ts... x) override {
-        float xy = this->xy_.value(x...);
-        float z = this->z_.value(x...);
+        bool xy = this->xy_.value(x...);
+        bool z = this->z_.value(x...);
         this->parent_->set_home(xy, z);
     }
 };
