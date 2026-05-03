@@ -236,7 +236,7 @@ void Grbl::release_state() {
 
 void Grbl::set_home(bool xy, bool z) {
     if (!xy && !z) return;  // Nothing to set as home
-    std::string cmd = "G92";
+    std::string cmd = "G90\nG92";
     if (xy) cmd += " X0 Y0";
     if (z) cmd += " Z0";
     this->send_command(cmd);
@@ -250,11 +250,12 @@ void Grbl::probe_z(float distance, float seek_rate, float feed_rate, float offse
     char cmd[256];
     snprintf(cmd, sizeof(cmd),
              "G21 G91\n"
-             "G38.2 Z-%.3f F%.1f\n"
+             "G38.3 Z-%.3f F%.1f\n"
              "G0 Z1\n"
              "G38.2 Z-2 F%.3f\n"
              "G92 Z%.3f\n"
-             "G91 G0 Z%.3f",
+             "G91 G0 Z%.3f\n"
+             "G90",
              distance, seek_rate, feed_rate, offset, retract);
     send_command(cmd);
 }
