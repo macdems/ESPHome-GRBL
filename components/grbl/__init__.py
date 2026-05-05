@@ -4,7 +4,7 @@ import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome import automation
 from esphome.components import uart
-from esphome.const import CONF_ID, CONF_PORT
+from esphome.const import CONF_ID, CONF_PORT, SCHEDULER_DONT_RUN
 
 from .const import *
 
@@ -50,6 +50,30 @@ def grbl_param(value):
     raise cv.Invalid("GRBL parameter must be an integer or '$<number>'")
 
 
+def float_or_auto(value):
+    if isinstance(value, str) and value.lower() == CONF_AUTO:
+        return -1.
+    return cv.float_(value)
+
+
+class ValidateAxisDependency:
+    def __init__(self, *param_keys):
+        self.param_keys = param_keys
+
+    def __call__(self, config):
+        param = config.get(CONF_ENTITY_PARAM)
+        has_axis = CONF_AXIS in config
+
+        if param in self.param_keys:
+            if not has_axis:
+                raise cv.Invalid(f"axis is required when param is '{param}'")
+        else:
+            if has_axis:
+                raise cv.Invalid(f"axis not allowed when param is '{param}'")
+
+        return config
+
+
 ## Actions
 
 GRBL_SIMPLE_ACTION_SCHEMA = cv.Schema({
@@ -73,12 +97,13 @@ def register_grbl_simple_action(action_name, class_name):
     return cls
 
 
-# grbl.cancel_jog, grbl.reset, grbl.release_state, and grbl.run_homing_cycle actions
+# grbl.cancel_jog, grbl.reset, grbl.release_state, grbl.run_homing_cycle, and grbl.update_status actions
 
 GrblCancelJogAction = register_grbl_simple_action(ACTION_CANCEL_JOG, "GrblCancelJogAction")
 GrblSendResetAction = register_grbl_simple_action(ACTION_RESET, "GrblSendResetAction")
 GrblReleaseStateAction = register_grbl_simple_action(ACTION_RELEASE_STATE, "GrblReleaseStateAction")
 GrblRunHomingCycleAction = register_grbl_simple_action(ACTION_RUN_HOMING_CYCLE, "GrblRunHomingCycleAction")
+GrblUpdateStatusAction = register_grbl_simple_action(ACTION_UPDATE_STATUS, "GrblUpdateStatusAction")
 
 # grbl.send_command action
 
@@ -158,7 +183,7 @@ GrblProbeZAction = ns.class_("GrblProbeZAction", automation.Action, cg.Parented.
 
 GRBL_PROBE_Z_SCHEMA = cv.Schema({
     cv.GenerateID(CONF_GRBL_ID): cv.use_id(Grbl),
-    cv.Optional(CONF_DISTANCE, default=15.0): cv.templatable(cv.float_),
+    cv.Optional(CONF_DISTANCE, default=CONF_AUTO): cv.templatable(float_or_auto),
     cv.Optional(CONF_SEEK_RATE, default=100.0): cv.templatable(cv.float_),
     cv.Optional(CONF_FEED_RATE, default=10.0): cv.templatable(cv.float_),
     cv.Optional(CONF_OFFSET, default=0.0): cv.templatable(cv.float_),

@@ -25,6 +25,10 @@ static const char* TAG = "GRBL";
 
 namespace esphome { namespace grbl {
 
+static const char* state_names[] = {
+    "Idle", "Run", "Hold", "Jog", "Alarm", "Door", "Check", "Home", "Sleep", "Unknown",
+};
+
 Grbl::Client::Client(AsyncClient* client, std::vector<uint8_t>& recv_buf)
     : tcp_client{client}, identifier{this->format_ip()}, connected{true} {
     ESP_LOGD(TAG, "New client connected from %s", this->identifier.c_str());
@@ -90,6 +94,7 @@ void Grbl::setup() {
     this->send_reset();
     this->send_command("S0\nM5\n");  // Ensure spindle/laser is off
     this->send_command("$$");        // Request GRBL settings update on startup
+    this->update_status();           // Request GRBL status update on startup
 
     // We wait a bit more before starting the server to give GRBL time to reset and be ready to accept commands
     this->set_timeout(500, [this]() { this->server_.begin(); });
@@ -105,6 +110,46 @@ void Grbl::loop() {
 void Grbl::update_connection_sensor_() {
     if (this->connection_sensor_ != nullptr) {
         this->connection_sensor_->publish_state(this->client_connected());
+    }
+}
+
+void Grbl::update_status_sensors_() {
+    if (this->state_text_sensor_ != nullptr && this->status_.state != STATE_UNKNOWN) {
+        std::string state_str = state_names[this->status_.state];
+        state_str[0] += 32;  // convert to lowercase for consistency in Home Assistant
+        if (state_str != this->state_text_sensor_->state) this->state_text_sensor_->publish_state(state_str);
+    }
+    for (int i = 0; i < 3; i++) {
+        if (this->mpos_sensors_[i] != nullptr && !std::isnan(this->status_.mpos[i])) {
+            if (this->mpos_sensors_[i]->state != this->status_.mpos[i])
+                this->mpos_sensors_[i]->publish_state(this->status_.mpos[i]);
+        }
+    }
+    for (int i = 0; i < 3; i++) {
+        if (this->wpos_sensors_[i] != nullptr && !std::isnan(this->status_.wpos[i])) {
+            if (this->wpos_sensors_[i]->state != this->status_.wpos[i])
+                this->wpos_sensors_[i]->publish_state(this->status_.wpos[i]);
+        }
+    }
+    for (int i = 0; i < 3; i++) {
+        if (this->wco_sensors_[i] != nullptr && !std::isnan(this->status_.wco[i])) {
+            if (this->wco_sensors_[i]->state != this->status_.wco[i]) this->wco_sensors_[i]->publish_state(this->status_.wco[i]);
+        }
+    }
+    if (this->fs_feed_sensor_ != nullptr && this->status_.fs_feed >= 0) {
+        if (this->fs_feed_sensor_->state != this->status_.fs_feed) this->fs_feed_sensor_->publish_state(this->status_.fs_feed);
+    }
+    if (this->fs_speed_sensor_ != nullptr && this->status_.fs_speed >= 0) {
+        if (this->fs_speed_sensor_->state != this->status_.fs_speed) this->fs_speed_sensor_->publish_state(this->status_.fs_speed);
+    }
+    for (int i = 0; i < 3; i++) {
+        if (this->limit_sensors_[i] != nullptr) {
+            if (this->limit_sensors_[i]->state != (this->status_.limits >> i) & 1)
+                this->limit_sensors_[i]->publish_state((this->status_.limits >> i) & 1);
+        }
+    }
+    if (this->probe_sensor_ != nullptr) {
+        if (this->probe_sensor_->state != (this->status_.limits & 8)) this->probe_sensor_->publish_state(this->status_.limits & 8);
     }
 }
 
@@ -165,14 +210,86 @@ void Grbl::on_shutdown() {
     }
 }
 
+void Grbl::update_status() {
+    this->write_byte('?');  // Request GRBL status update
+}
+
+std::string Grbl::Status::str() const {
+    char buf[512];
+    snprintf(buf, sizeof(buf),
+             "State: %s, MPos: (%.3f, %.3f, %.3f), WPos: (%.3f, %.3f, %.3f), WCO: (%.3f, %.3f, %.3f), FS: (%d, %d), "
+             "Limits: (%s%s%s%s)",
+             state_names[this->state], this->mpos[0], this->mpos[1], this->mpos[2], this->wpos[0], this->wpos[1], this->wpos[2],
+             this->wco[0], this->wco[1], this->wco[2], this->fs_feed, this->fs_speed, this->limits & 1 ? "X" : "",
+             this->limits & 2 ? "Y" : "", this->limits & 4 ? "Z" : "", this->limits & 8 ? "P" : "");
+    return std::string(buf);
+}
+
 void Grbl::parse_grbl_response_(const std::string& line) {
-    // Expected format: $<number>=<int_or_float> (e.g. $32=0, $110=500.0)
-    int setting_id = 0;
-    float setting_value = 0.0f;
     int consumed = 0;
 
-    if (sscanf(line.c_str(), "$%d=%f%n", &setting_id, &setting_value, &consumed) == 2 &&
-        consumed == static_cast<int>(line.size()) - 1) {
+    int setting_id = 0;
+    float setting_value = 0.0f;
+
+    if (line[0] == '<' && line[line.size() - 2] == '>') {
+        // Status report line, e.g. "<Idle|MPos:5.000,10.000,0.000|FS:0,0>"
+        // We could parse this to get the current position and state of the machine, but for now we just log it.
+        ESP_LOGV(TAG, "Received GRBL status report: %s", line.c_str());
+        size_t start = 1;  // Skip the initial '<'
+        while (start < line.size()) {
+            size_t end = line.find('|', start);
+            if (end == std::string::npos) end = line.size() - 1;  // Skip the final '>'
+            const std::string part = line.substr(start, end - start);
+            ESP_LOGVV(TAG, "Status part: %s", part.c_str());
+            if (start == 1) {
+                // The first part of the status report is the state, e.g. "Idle", "Run", "Hold", etc.
+                for (size_t i = 0; i < 9; i++) {
+                    if (part == state_names[i]) {
+                        this->status_.state = static_cast<State>(i);
+                        break;
+                    }
+                }
+            } else if (!part.empty()) {
+                bool has_mpos = false;
+                bool has_wpos = false;
+                if (part.compare(0, 5, "MPos:") == 0) {
+                    sscanf(part.c_str(), "MPos:%f,%f,%f", &this->status_.mpos[0], &this->status_.mpos[1], &this->status_.mpos[2]);
+                    has_mpos = true;
+                } else if (part.compare(0, 5, "WPos:") == 0) {
+                    sscanf(part.c_str(), "WPos:%f,%f,%f", &this->status_.wpos[0], &this->status_.wpos[1], &this->status_.wpos[2]);
+                    has_wpos = true;
+                } else if (part.compare(0, 4, "WCO:") == 0) {
+                    sscanf(part.c_str(), "WCO:%f,%f,%f", &this->status_.wco[0], &this->status_.wco[1], &this->status_.wco[2]);
+                } else if (part.compare(0, 3, "FS:") == 0) {
+                    sscanf(part.c_str(), "FS:%d,%d", &this->status_.fs_feed, &this->status_.fs_speed);
+                } else if (part.compare(0, 2, "F:") == 0) {
+                    sscanf(part.c_str(), "F:%d", &this->status_.fs_feed);
+                } else if (part.compare(0, 3, "Pn:") == 0) {
+                    this->status_.limits = 0;
+                    for (int i = 0; i < 3; i++) {
+                        this->status_.limits |= (part.find('X' + i, 3) != std::string::npos) << i;
+                    }
+                    this->status_.limits |= part.find('P', 3) != std::string::npos << 3;
+                }
+                // Update MPos/WPos
+                if (has_mpos) {
+                    for (int i = 0; i < 3; i++) {
+                        this->status_.wpos[i] = this->status_.mpos[i] - this->status_.wco[i];
+                    }
+                } else if (has_wpos) {
+                    for (int i = 0; i < 3; i++) {
+                        this->status_.mpos[i] = this->status_.wpos[i] + this->status_.wco[i];
+                    }
+                }
+            }
+            start = end + 1;
+        }
+        ESP_LOGD(TAG, "Got GRBL status: %s", this->status_.str().c_str());
+        this->update_status_sensors_();
+
+    } else if (sscanf(line.c_str(), "$%d=%f%n", &setting_id, &setting_value, &consumed) == 2 &&
+               consumed == static_cast<int>(line.size()) - 1) {
+        // This is a GRBL setting line, e.g. "$100=250.000"
         this->grbl_settings_[setting_id] = setting_value;
         ESP_LOGV(TAG, "Parsed GRBL setting: $%d=%f", setting_id, setting_value);
         for (auto* listener : this->listeners_) {
@@ -240,17 +357,30 @@ void Grbl::set_home(bool xy, bool z) {
     if (xy) cmd += " X0 Y0";
     if (z) cmd += " Z0";
     this->send_command(cmd);
+    this->set_timeout(
+        100, [this]() { this->update_status(); });  // Update status after a short delay to get the new position after setting home
 }
 
 void Grbl::run_homing_cycle() {
-    this->send_command("$H\n");  // GRBL command to run homing cycle
+    this->send_command("$H");  // GRBL command to run homing cycle
 }
 
 void Grbl::probe_z(float distance, float seek_rate, float feed_rate, float offset, float retract) {
     char cmd[256];
+    if (distance < 0) {
+        float z = this->status_.mpos[2];
+        auto max_z = this->get_grbl_setting<float>(132);
+        if (max_z && !std::isnan(z)) {
+            distance = *max_z + z - 0.001;  // z is negative
+        } else {
+            ESP_LOGW(TAG, "Cannot probe Z because current Z position is unknown");
+            return;
+        }
+        ESP_LOGD(TAG, "Calculated probe distance: %.3f (current Z: %.3f, max Z: %.3f)", distance, z, *max_z);
+    }
     snprintf(cmd, sizeof(cmd),
              "G21 G91\n"
-             "G38.3 Z-%.3f F%.1f\n"
+             "G38.2 Z-%.3f F%.1f\n"
              "G0 Z1\n"
              "G38.2 Z-2 F%.3f\n"
              "G92 Z%.3f\n"

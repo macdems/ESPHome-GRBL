@@ -23,6 +23,8 @@
 #include <optional>
 
 #include "esphome/components/binary_sensor/binary_sensor.h"
+#include "esphome/components/sensor/sensor.h"
+#include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/components/uart/uart.h"
 #include "esphome/core/component.h"
 
@@ -49,6 +51,27 @@ class Grbl : public uart::UARTDevice, public Component {
         this->connection_sensor_ = connection_sensor;
     }
 
+    void register_state_text_sensor(text_sensor::TextSensor* sensor) { this->state_text_sensor_ = sensor; }
+    void register_mpos_sensor(const char* axis, sensor::Sensor* sensor) {
+        assert(*axis >= 'X' && *axis <= 'Z');
+        this->mpos_sensors_[*axis - 'X'] = sensor;
+    }
+    void register_wpos_sensor(const char* axis, sensor::Sensor* sensor) {
+        assert(*axis >= 'X' && *axis <= 'Z');
+        this->wpos_sensors_[*axis - 'X'] = sensor;
+    }
+    void register_wco_sensor(const char* axis, sensor::Sensor* sensor) {
+        assert(*axis >= 'X' && *axis <= 'Z');
+        this->wco_sensors_[*axis - 'X'] = sensor;
+    }
+    void register_fs_feed_sensor(sensor::Sensor* sensor) { this->fs_feed_sensor_ = sensor; }
+    void register_fs_speed_sensor(sensor::Sensor* sensor) { this->fs_speed_sensor_ = sensor; }
+    void register_limit_sensor(const char* axis, binary_sensor::BinarySensor* sensor) {
+        assert(*axis >= 'X' && *axis <= 'Z');
+        this->limit_sensors_[*axis - 'X'] = sensor;
+    }
+    void register_probe_sensor(binary_sensor::BinarySensor* sensor) { this->probe_sensor_ = sensor; }
+
     bool client_connected() const { return this->client_ && this->client_->connected; }
 
     void send_command(const std::string& command);
@@ -59,6 +82,8 @@ class Grbl : public uart::UARTDevice, public Component {
     void set_home(bool xy = true, bool z = true);
     void run_homing_cycle();
     void probe_z(float distance = 30.0, float seek_rate = 100.0, float feed_rate = 10.0, float offset = 0.0, float retract = 5.0);
+
+    void update_status();
 
     template <typename T> std::optional<T> get_grbl_setting(int setting_number) {
         auto it = this->grbl_settings_.find(setting_number);
@@ -79,9 +104,7 @@ class Grbl : public uart::UARTDevice, public Component {
         virtual ~Listener() = default;
     };
 
-    void register_listener(Listener* listener) {
-        this->listeners_.push_back(listener);
-    }
+    void register_listener(Listener* listener) { this->listeners_.push_back(listener); }
 
   protected:
     AsyncServer server_{0};
@@ -109,8 +132,44 @@ class Grbl : public uart::UARTDevice, public Component {
 
     bool allow_commands_when_connected_;
 
+    enum State {
+        STATE_IDLE = 0,
+        STATE_RUN = 1,
+        STATE_HOLD = 2,
+        STATE_JOG = 3,
+        STATE_ALARM = 4,
+        STATE_DOOR = 5,
+        STATE_CHECK = 6,
+        STATE_HOME = 7,
+        STATE_SLEEP = 8,
+        STATE_UNKNOWN = 9
+    };
+
+    text_sensor::TextSensor* state_text_sensor_{nullptr};
+
+    binary_sensor::BinarySensor* limit_sensors_[3]{nullptr, nullptr, nullptr};
+    binary_sensor::BinarySensor* probe_sensor_{nullptr};
+
+    sensor::Sensor* mpos_sensors_[3]{nullptr, nullptr, nullptr};
+    sensor::Sensor* wpos_sensors_[3]{nullptr, nullptr, nullptr};
+    sensor::Sensor* wco_sensors_[3]{nullptr, nullptr, nullptr};
+    sensor::Sensor* fs_feed_sensor_{nullptr};
+    sensor::Sensor* fs_speed_sensor_{nullptr};
+
+    struct Status {
+        State state = STATE_UNKNOWN;
+        float mpos[3] = {NAN, NAN, NAN};
+        float wpos[3] = {NAN, NAN, NAN};
+        float wco[3] = {NAN, NAN, NAN};
+        int fs_feed = -1;
+        int fs_speed = -1;
+        uint8_t limits = 0;
+        std::string str() const;
+    } status_{};
+
     std::string line_buffer_{};
     std::map<int, float> grbl_settings_{};
+
     std::vector<Listener*> listeners_{};
 
     void cleanup_();
@@ -118,6 +177,8 @@ class Grbl : public uart::UARTDevice, public Component {
     void serial_read_();
     void serial_write_();
     void update_connection_sensor_();
+
+    void update_status_sensors_();
 
     void parse_grbl_response_(const std::string& line);
 };
