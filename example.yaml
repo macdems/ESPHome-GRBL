@@ -1,0 +1,387 @@
+# code: language=esphome
+esphome:
+  name: cnc-remote
+  friendly_name: CNC 3018 Pro Remote
+
+esp32:
+  variant: ESP32S3
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+
+external_components:
+  - source: github://macdems/ESPHome-GRBL
+    components: [grbl]
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: !secret api_encryption_key
+  actions:
+    - action: send_grbl_command
+      variables:
+        command: string
+      then:
+        - grbl.send_command: !lambda 'return command;'
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+uart:
+  tx_pin: GPIO43
+  rx_pin: GPIO44
+  baud_rate: 115200
+
+grbl:
+  allow_commands_when_connected: true
+
+interval:
+  - interval: 5s
+    then:
+      - grbl.update_status
+
+binary_sensor:
+  - platform: grbl
+    param: client_connected
+    name: "Client Connection"
+
+  - platform: grbl
+    param: limit
+    axis: x
+    name: Limit X
+    icon: "mdi:axis-x-arrow-lock"
+    device_class: problem
+
+  - platform: grbl
+    param: limit
+    axis: y
+    name: Limit Y
+    icon: "mdi:axis-y-arrow-lock"
+    device_class: problem
+
+  - platform: grbl
+    param: limit
+    axis: z
+    name: Limit Z
+    icon: "mdi:axis-z-arrow-lock"
+    device_class: problem
+
+  - platform: grbl
+    param: probe
+    name: Probe
+    icon: "mdi:format-vertical-align-bottom"
+    device_class: problem
+
+sensor:
+  - platform: wifi_signal
+    name: RSSI
+    update_interval: 60s
+
+  - platform: internal_temperature
+    name: System Temperature
+
+  - platform: grbl
+    id: mpos_x
+    param: machine_position
+    axis: x
+    accuracy_decimals: 3
+    unit_of_measurement: mm
+    name: Machine Position X
+    icon: "mdi:axis-x-arrow"
+
+  - platform: grbl
+    id: mpos_y
+    param: machine_position
+    axis: y
+    accuracy_decimals: 3
+    unit_of_measurement: mm
+    name: Machine Position Y
+    icon: "mdi:axis-y-arrow"
+
+  - platform: grbl
+    id: mpos_z
+    param: machine_position
+    axis: z
+    accuracy_decimals: 3
+    unit_of_measurement: mm
+    name: Machine Position Z
+    icon: "mdi:axis-z-arrow"
+
+  - platform: grbl
+    id: wpos_x
+    param: work_position
+    axis: x
+    accuracy_decimals: 3
+    unit_of_measurement: mm
+    name: Work Position X
+    icon: "mdi:axis-x-arrow"
+
+  - platform: grbl
+    id: wpos_y
+    param: work_position
+    axis: y
+    accuracy_decimals: 3
+    unit_of_measurement: mm
+    name: Work Position Y
+    icon: "mdi:axis-y-arrow"
+
+  - platform: grbl
+    id: wpos_z
+    param: work_position
+    axis: z
+    accuracy_decimals: 3
+    unit_of_measurement: mm
+    name: Work Position Z
+    icon: "mdi:axis-z-arrow"
+
+  - platform: grbl
+    id: spindle_speed
+    param: spindle_speed
+    name: Spindle Speed
+    unit_of_measurement: "RPM"
+    icon: "mdi:rotate-right"
+
+  - platform: grbl
+    id: feed_rate
+    param: feed_rate
+    name: Feed Rate
+    unit_of_measurement: "mm/min"
+    icon: "mdi:run-fast"
+
+text_sensor:
+  - platform: grbl
+    id: grbl_state
+    param: state
+    name: "GRBL State"
+
+number:
+  - platform: template
+    id: xy_speed
+    name: "XY Speed"
+    unit_of_measurement: "mm/min"
+    min_value: 0
+    max_value: 1200
+    initial_value: 1200
+    step: 100
+    device_class: speed
+    entity_category: config
+    optimistic: true
+    restore_value: true
+
+  - platform: template
+    id: xy_distance
+    name: XY Distance
+    unit_of_measurement: mm
+    min_value: 0
+    max_value: 200
+    initial_value: 10
+    step: 0.1
+    device_class: distance
+    entity_category: config
+    optimistic: true
+    restore_value: true
+
+  - platform: grbl
+    id: max_power
+    param: 30
+    min_value: 0
+    max_value: 10000
+    step: 100
+
+button:
+  - platform: template
+    name: Reset
+    icon: "mdi:restart"
+    on_press:
+      # - grbl.reset
+      - output.turn_on: gpio_reset
+      - delay: 50ms
+      - output.turn_off: gpio_reset
+
+  - platform: template
+    name: Stop
+    icon: "mdi:close-octagon-outline"
+    on_press:
+      - grbl.cancel_jog
+
+  - platform: template
+    name: Set Home Position
+    icon: "mdi:home-map-marker"
+    on_press:
+      - grbl.set_home
+
+  - platform: template
+    name: Measure Tool Height
+    icon: "mdi:format-vertical-align-bottom"
+    on_press:
+      - grbl.probe_z:
+          retract: 0.0
+
+  - platform: template
+    name: Run Homing Cycle
+    icon: "mdi:home"
+    on_press:
+      - grbl.run_homing_cycle
+
+  - platform: template
+    name: Unlock GRBL
+    icon: "mdi:lock-open-outline"
+    on_press:
+      - grbl.release_state
+
+  - platform: template
+    name: Move North
+    icon: "mdi:arrow-up"
+    on_press:
+      - grbl.jog:
+          speed: !lambda "return id(xy_speed).state;"
+          dy: !lambda "return id(xy_distance).state;"
+
+  - platform: template
+    name: Move North-East
+    icon: "mdi:arrow-top-right"
+    on_press:
+      - grbl.jog:
+          speed: !lambda "return id(xy_speed).state;"
+          dx: !lambda "return id(xy_distance).state;"
+          dy: !lambda "return id(xy_distance).state;"
+
+  - platform: template
+    name: Move East
+    icon: "mdi:arrow-right"
+    on_press:
+      - grbl.jog:
+          speed: !lambda "return id(xy_speed).state;"
+          dx: !lambda "return id(xy_distance).state;"
+
+  - platform: template
+    name: Move South-East
+    icon: "mdi:arrow-bottom-right"
+    on_press:
+      - grbl.jog:
+          speed: !lambda "return id(xy_speed).state;"
+          dx: !lambda "return id(xy_distance).state;"
+          dy: !lambda "return -id(xy_distance).state;"
+
+  - platform: template
+    name: Move South
+    icon: "mdi:arrow-down"
+    on_press:
+      - grbl.jog:
+          speed: !lambda "return id(xy_speed).state;"
+          dy: !lambda "return -id(xy_distance).state;"
+
+  - platform: template
+    name: Move South-West
+    icon: "mdi:arrow-bottom-left"
+    on_press:
+      - grbl.jog:
+          speed: !lambda "return id(xy_speed).state;"
+          dx: !lambda "return -id(xy_distance).state;"
+          dy: !lambda "return -id(xy_distance).state;"
+
+  - platform: template
+    name: Move West
+    icon: "mdi:arrow-left"
+    on_press:
+      - grbl.jog:
+          speed: !lambda "return id(xy_speed).state;"
+          dx: !lambda "return -id(xy_distance).state;"
+
+  - platform: template
+    name: Move North-West
+    icon: "mdi:arrow-top-left"
+    on_press:
+      - grbl.jog:
+          speed: !lambda "return id(xy_speed).state;"
+          dx: !lambda "return -id(xy_distance).state;"
+          dy: !lambda "return id(xy_distance).state;"
+
+  - platform: template
+    name: Raise 10mm
+    icon: "mdi:chevron-triple-up"
+    on_press:
+      - grbl.jog:
+          speed: 1000
+          dz: 10
+
+  - platform: template
+    name: Raise 1mm
+    icon: "mdi:chevron-double-up"
+    on_press:
+      - grbl.jog:
+          speed: 100
+          dz: 1
+
+  - platform: template
+    name: Raise 0.1mm
+    icon: "mdi:chevron-up"
+    on_press:
+      - grbl.jog:
+          speed: 10
+          dz: 0.1
+
+  - platform: template
+    name: Lower 10mm
+    icon: "mdi:chevron-triple-down"
+    on_press:
+      - grbl.jog:
+          speed: 1000
+          dz: -10
+
+  - platform: template
+    name: Lower 1mm
+    icon: "mdi:chevron-double-down"
+    on_press:
+      - grbl.jog:
+          speed: 100
+          dz: -1
+
+  - platform: template
+    name: Lower 0.1mm
+    icon: "mdi:chevron-down"
+    on_press:
+      - grbl.jog:
+          speed: 10
+          dz: -0.1
+
+switch:
+  - platform: grbl
+    param: 32
+    name: Laser Mode
+    icon: "mdi:flash"
+    entity_category: config
+    on_turn_on:
+      - number.set:
+          id: max_power
+          value: 1000
+    on_turn_off:
+      - number.set:
+          id: max_power
+          value: 10000
+
+  - platform: template
+    name: Laser Pointer
+    icon: "mdi:laser-pointer"
+    optimistic: true
+    turn_on_action:
+      - grbl.send_command: |-
+          M3 S1
+          G1 F1000
+    turn_off_action:
+      - grbl.send_command: |-
+          M5 S0
+          G0
+
+output:
+  - platform: gpio
+    pin: GPIO1
+    id: gpio_reset
