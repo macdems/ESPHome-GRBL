@@ -1,7 +1,7 @@
 # code: language=esphome
 esphome:
   name: cnc-remote
-  friendly_name: CNC 3018 Pro Remote
+  friendly_name: CNC 3018 Remote
 
 esp32:
   variant: ESP32S3
