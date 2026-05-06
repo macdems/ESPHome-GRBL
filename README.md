@@ -25,6 +25,12 @@ It is designed for ESP32/ESP8266 devices connected to a GRBL controller via UART
   - `number`
 - ⚡ Native ESPHome automations support
 
+### Remote Access via Telnet
+
+The component includes a built-in telnet server that allows you to connect to your GRBL controller remotely. This is especially useful for sending commands or monitoring the machine state without needing direct physical access. By default, the telnet server listens on port 23, but you can configure it to use a different port if needed.
+
+Due to the nature of the telnet protocol, only one client can be connected at a time. When a client is connected, the component will not allow sending commands from Home Assistant to avoid conflicts. However, you can configure this behavior to allow commands even when a telnet client is connected.
+
 ## 📦 Installation
 
 Add this to your ESPHome YAML configuration:
@@ -58,7 +64,7 @@ uart:
 
 grbl:
   port: 23 # Optional: Default telnet port is 23
-  allow_commands_when_connected: false # Optional: only allow commands when telnet client is connected, default is false
+  allow_commands_when_connected: false # Optional: allow commands when telnet client is connected, default is false
 
 ```
 
