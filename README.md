@@ -232,7 +232,7 @@ If GRBL is in an alarm or error state, you repeat the homing cycle or release th
 - grbl.release_state
 ```
 
-### Set current position as home (G92)
+### Set current position as home
 
 You may set the current position as work coordinates home for X/Y/Z axes:
 
@@ -240,7 +240,24 @@ You may set the current position as work coordinates home for X/Y/Z axes:
 - grbl.set_home:
     xy: true # Set X and Y as home
     z: true  # Set Z as home
+    coords: G54 # Optional: select coordinate system (G54-G59 or G92), default is G54
 ```
+
+### Probe Z
+Run a Z probe cycle to measure the height of the tool. You can specify the `distance` to probe, `seek_rate` for the initial probing move, `feed_rate` for the final probing move, `offset` to apply to the measured height, and `retract` distance to move back after probing. You can also specify the coordinate system to use for the probe results.
+
+```yaml
+- grbl.probe_z:
+    distance: auto
+    seek_rate: 100.0
+    feed_rate: 10.0
+    offset: 0.0
+    retract: 5.0
+    coords: G54 # Optional: select coordinate system (G54-G59 or G92), default is G54
+```
+
+`distance: auto` will automatically calculate the probing distance based on the current Z position, which is useful to avoid crashing the tool into the bed. It will only work if homing is enabled and the machine has a valid position.
+
 
 ### Update status
 

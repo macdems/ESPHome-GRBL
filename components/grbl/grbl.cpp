@@ -298,6 +298,17 @@ void Grbl::parse_grbl_response_(const std::string& line) {
     }
 }
 
+std::string Grbl::set_coords_command_(Coords coords) {
+    switch (coords) {
+        case COORDS_G92:
+            return "G92";
+        default:
+            std::string result = "G10 L20 P1";
+            result[result.size() - 1] += static_cast<char>(coords);
+            return result;
+     }
+}
+
 void Grbl::send_command(const std::string& command) {
     if (this->client_connected() && !this->allow_commands_when_connected_) {
         ESP_LOGW(TAG, "Not sending command '%s' because a client is connected", command.c_str());
@@ -351,9 +362,10 @@ void Grbl::release_state() {
     this->send_command("$X\n");  // GRBL command to release from alarm state, allowing new commands to be accepted
 }
 
-void Grbl::set_home(bool xy, bool z) {
+void Grbl::set_home(bool xy, bool z, Coords coords) {
     if (!xy && !z) return;  // Nothing to set as home
-    std::string cmd = "G90\nG92";
+    std::string cmd = "G90\n";
+    cmd += this->set_coords_command_(coords);
     if (xy) cmd += " X0 Y0";
     if (z) cmd += " Z0";
     this->send_command(cmd);
@@ -365,7 +377,7 @@ void Grbl::run_homing_cycle() {
     this->send_command("$H");  // GRBL command to run homing cycle
 }
 
-void Grbl::probe_z(float distance, float seek_rate, float feed_rate, float offset, float retract) {
+void Grbl::probe_z(float distance, float seek_rate, float feed_rate, float offset, float retract, Coords coords) {
     char cmd[256];
     if (distance < 0) {
         float z = this->status_.mpos[2];
@@ -378,15 +390,16 @@ void Grbl::probe_z(float distance, float seek_rate, float feed_rate, float offse
         }
         ESP_LOGD(TAG, "Calculated probe distance: %.3f (current Z: %.3f, max Z: %.3f)", distance, z, *max_z);
     }
+    std::string cords_cmd = this->set_coords_command_(coords);
     snprintf(cmd, sizeof(cmd),
              "G21 G91\n"
              "G38.2 Z-%.3f F%.1f\n"
              "G0 Z1\n"
              "G38.2 Z-2 F%.3f\n"
-             "G92 Z%.3f\n"
+             "%s Z%.3f\n"
              "G91 G0 Z%.3f\n"
              "G90",
-             distance, seek_rate, feed_rate, offset, retract);
+             distance, seek_rate, feed_rate, cords_cmd.c_str(), offset, retract);
     send_command(cmd);
 }
 

@@ -36,7 +36,18 @@
 
 namespace esphome { namespace grbl {
 
-class Grbl : public uart::UARTDevice, public Component {
+enum Coords {
+    COORDS_G54 = 0,  // G54 work coordinates
+    COORDS_G55 = 1,  // G55 work coordinates
+    COORDS_G56 = 2,  // G56 work coordinates
+    COORDS_G57 = 3,  // G57 work coordinates
+    COORDS_G58 = 4,  // G58 work coordinates
+    COORDS_G59 = 5,  // G59 work coordinates
+    COORDS_G92 = 6,  // G92 coordinates
+};
+
+class Grbl : public uart::UARTDevice,
+    public Component {
   public:
     void setup() override;
     void loop() override;
@@ -79,9 +90,14 @@ class Grbl : public uart::UARTDevice, public Component {
     void cancel_jog();
     void send_reset();
     void release_state();
-    void set_home(bool xy = true, bool z = true);
+    void set_home(bool xy = true, bool z = true, Coords coords = COORDS_G54);
     void run_homing_cycle();
-    void probe_z(float distance = 30.0, float seek_rate = 100.0, float feed_rate = 10.0, float offset = 0.0, float retract = 5.0);
+    void probe_z(float distance = 30.0,
+                 float seek_rate = 100.0,
+                 float feed_rate = 10.0,
+                 float offset = 0.0,
+                 float retract = 5.0,
+                 Coords coords = COORDS_G54);
 
     void update_status();
 
@@ -181,6 +197,8 @@ class Grbl : public uart::UARTDevice, public Component {
     void update_status_sensors_();
 
     void parse_grbl_response_(const std::string& line);
+
+    std::string set_coords_command_(Coords coords);
 };
 
 template <> inline void Grbl::set_grbl_setting<float>(int setting_number, float value) {

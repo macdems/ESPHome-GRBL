@@ -74,6 +74,19 @@ class ValidateAxisDependency:
         return config
 
 
+GrblCoords = ns.enum('Coords')
+
+GRBL_COORDS = {
+    'G92': GrblCoords.COORDS_G92,
+    'G54': GrblCoords.COORDS_G54,
+    'G55': GrblCoords.COORDS_G55,
+    'G56': GrblCoords.COORDS_G56,
+    'G57': GrblCoords.COORDS_G57,
+    'G58': GrblCoords.COORDS_G58,
+    'G59': GrblCoords.COORDS_G59,
+}
+
+
 ## Actions
 
 GRBL_SIMPLE_ACTION_SCHEMA = cv.Schema({
@@ -163,6 +176,7 @@ GRBL_SET_HOME_SCHEMA = cv.Schema({
     cv.GenerateID(CONF_GRBL_ID): cv.use_id(Grbl),
     cv.Optional(CONF_XY, default=True): cv.templatable(cv.boolean),
     cv.Optional(CONF_Z, default=True): cv.templatable(cv.boolean),
+    cv.Optional(CONF_COORDS, default="G54"): cv.templatable(cv.enum(GRBL_COORDS, upper=True)),
 })
 
 
@@ -174,6 +188,8 @@ async def grbl_set_home_to_code(config, action_id, template_arg, args):
     cg.add(var.set_xy(xy))
     z = await cg.templatable(config[CONF_Z], args, cg.bool_)
     cg.add(var.set_z(z))
+    coords = await cg.templatable(config[CONF_COORDS], args, GrblCoords)
+    cg.add(var.set_coords(coords))
     return var
 
 
@@ -188,6 +204,7 @@ GRBL_PROBE_Z_SCHEMA = cv.Schema({
     cv.Optional(CONF_FEED_RATE, default=10.0): cv.templatable(cv.float_),
     cv.Optional(CONF_OFFSET, default=0.0): cv.templatable(cv.float_),
     cv.Optional(CONF_RETRACT, default=5.0): cv.templatable(cv.float_),
+    cv.Optional(CONF_COORDS, default="G54"): cv.templatable(cv.enum(GRBL_COORDS, upper=True)),
 })
 
 
@@ -205,4 +222,6 @@ async def grbl_probe_z_to_code(config, action_id, template_arg, args):
     cg.add(var.set_offset(offset))
     retract = await cg.templatable(config[CONF_RETRACT], args, cg.float_)
     cg.add(var.set_retract(retract))
+    coords = await cg.templatable(config[CONF_COORDS], args, GrblCoords)
+    cg.add(var.set_coords(coords))
     return var

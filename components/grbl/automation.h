@@ -78,11 +78,13 @@ template <typename... Ts> class GrblSetHomeAction : public Action<Ts...>, public
   public:
     TEMPLATABLE_VALUE(bool, xy)
     TEMPLATABLE_VALUE(bool, z)
+    TEMPLATABLE_VALUE(Coords, coords)
 
     void play(Ts... x) override {
         bool xy = this->xy_.value(x...);
         bool z = this->z_.value(x...);
-        this->parent_->set_home(xy, z);
+        Coords coords = this->coords_.value(x...);
+        this->parent_->set_home(xy, z, coords);
     }
 };
 
@@ -93,14 +95,16 @@ template <typename... Ts> class GrblProbeZAction : public Action<Ts...>, public 
     TEMPLATABLE_VALUE(float, feed_rate)
     TEMPLATABLE_VALUE(float, offset)
     TEMPLATABLE_VALUE(float, retract)
+    TEMPLATABLE_VALUE(Coords, coords)
 
     void play(Ts... x) override {
-        float distance = this->distance_.value_or(x..., 30.);
+        float distance = this->distance_.value_or(x...,-1.);
         float seek_rate = this->seek_rate_.value_or(x..., 100.);
         float feed_rate = this->feed_rate_.value_or(x..., 10.);
         float offset = this->offset_.value_or(x..., 0.);
         float retract = this->retract_.value_or(x..., 5.);
-        this->parent_->probe_z(distance, seek_rate, feed_rate, offset, retract);
+        Coords coords = this->coords_.value_or(x..., Coords::COORDS_G54);
+        this->parent_->probe_z(distance, seek_rate, feed_rate, offset, retract, coords);
     }
 };
 
