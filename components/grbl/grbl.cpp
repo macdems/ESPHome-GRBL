@@ -287,6 +287,16 @@ void Grbl::parse_grbl_response_(const std::string& line) {
         ESP_LOGD(TAG, "Got GRBL status: %s", this->status_.str().c_str());
         this->update_status_sensors_();
 
+    } else if (line.compare(0, 6, "ALARM:") == 0) {
+        // GRBL alarm message, e.g. "ALARM:1"
+        ESP_LOGW(TAG, "Received GRBL alarm: %s", line.c_str() + 6);
+        this->status_.state = State::STATE_ALARM;
+        this->state_text_sensor_->publish_state("alarm");
+
+    } else if (line.compare(0, 6, "error:") == 0) {
+        // GRBL error message, e.g. "error:1"
+        ESP_LOGW(TAG, "Received GRBL error: %s", line.c_str() + 6);
+
     } else if (sscanf(line.c_str(), "$%d=%f%n", &setting_id, &setting_value, &consumed) == 2 &&
                consumed == static_cast<int>(line.size()) - 1) {
         // This is a GRBL setting line, e.g. "$100=250.000"
