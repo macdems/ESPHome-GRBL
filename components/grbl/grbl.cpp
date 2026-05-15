@@ -313,7 +313,7 @@ std::string Grbl::set_coords_command_(Coords coords) {
         case COORDS_G92:
             return "G92";
         default:
-            std::string result = "G10 L20 P1";
+            std::string result = "G10L20P1";
             result[result.size() - 1] += static_cast<char>(coords);
             return result;
      }
@@ -342,18 +342,18 @@ void Grbl::send_jog_command(float dist_x, float dist_y, float dist_z, int speed)
 
     char buf[16];
     if (dist_x != 0) {
-        snprintf(buf, sizeof(buf), " X%.3f", dist_x);
+        snprintf(buf, sizeof(buf), "X%.3f", dist_x);
         cmd += buf;
     }
     if (dist_y != 0) {
-        snprintf(buf, sizeof(buf), " Y%.3f", dist_y);
+        snprintf(buf, sizeof(buf), "Y%.3f", dist_y);
         cmd += buf;
     }
     if (dist_z != 0) {
-        snprintf(buf, sizeof(buf), " Z%.3f", dist_z);
+        snprintf(buf, sizeof(buf), "Z%.3f", dist_z);
         cmd += buf;
     }
-    snprintf(buf, sizeof(buf), " F%d\n", speed);
+    snprintf(buf, sizeof(buf), "F%d\n", speed);
     cmd += buf;
     this->send_command(cmd);
 
@@ -382,8 +382,8 @@ void Grbl::set_home(bool xy, bool z, Coords coords) {
     if (!xy && !z) return;  // Nothing to set as home
     std::string cmd = "G90\n";
     cmd += this->set_coords_command_(coords);
-    if (xy) cmd += " X0 Y0";
-    if (z) cmd += " Z0";
+    if (xy) cmd += "X0Y0";
+    if (z) cmd += "Z0";
     this->send_command(cmd);
     this->set_timeout(100, [this]() { this->update_status(); });
 }
@@ -407,12 +407,12 @@ void Grbl::probe_z(float distance, float seek_rate, float feed_rate, float offse
     }
     std::string cords_cmd = this->set_coords_command_(coords);
     snprintf(cmd, sizeof(cmd),
-             "G21 G91\n"
-             "G38.2 Z-%.3f F%.1f\n"
-             "G0 Z1\n"
-             "G38.2 Z-2 F%.3f\n"
-             "%s Z%.3f\n"
-             "G91 G0 Z%.3f\n"
+             "G21G91\n"
+             "G38.2Z-%.3fF%.1f\n"
+             "G0Z1\n"
+             "G38.2Z-2F%.3f\n"
+             "%sZ%.3f\n"
+             "G91G0Z%.3f\n"
              "G90",
              distance, seek_rate, feed_rate, cords_cmd.c_str(), offset, retract);
     send_command(cmd);
