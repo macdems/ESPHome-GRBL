@@ -356,6 +356,10 @@ void Grbl::send_jog_command(float dist_x, float dist_y, float dist_z, int speed)
     snprintf(buf, sizeof(buf), " F%d\n", speed);
     cmd += buf;
     this->send_command(cmd);
+
+    float dist = std::sqrt(dist_x * dist_x + dist_y * dist_y + dist_z * dist_z);
+    int estimated_time = static_cast<int>(dist / speed * 60 * 1000);  // Convert from mm/min to ms
+    this->set_timeout(estimated_time + 200, [this]() { this->update_status(); });  // Request status update after jogging
 }
 
 void Grbl::send_reset() {
@@ -366,10 +370,12 @@ void Grbl::send_reset() {
 void Grbl::cancel_jog() {
     ESP_LOGD(TAG, "Sending GRBL command: ^U");
     this->write_byte(0x85);  // Send Ctrl-U to cancel jogging in GRBL
+    this->set_timeout(100, [this]() { this->update_status(); });
 }
 
 void Grbl::release_state() {
-    this->send_command("$X\n");  // GRBL command to release from alarm state, allowing new commands to be accepted
+    this->send_command("$X");  // GRBL command to release from alarm state, allowing new commands to be accepted
+    this->set_timeout(100, [this]() { this->update_status(); });
 }
 
 void Grbl::set_home(bool xy, bool z, Coords coords) {
@@ -379,8 +385,7 @@ void Grbl::set_home(bool xy, bool z, Coords coords) {
     if (xy) cmd += " X0 Y0";
     if (z) cmd += " Z0";
     this->send_command(cmd);
-    this->set_timeout(
-        100, [this]() { this->update_status(); });  // Update status after a short delay to get the new position after setting home
+    this->set_timeout(100, [this]() { this->update_status(); });
 }
 
 void Grbl::run_homing_cycle() {
